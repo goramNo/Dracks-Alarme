@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"os/user"
+	"time"
 
-	"github.com/gen2brain/dlgs"
 	"github.com/gorilla/websocket"
 )
 
@@ -20,58 +23,115 @@ type Command struct {
 	Data string `json:"data"`
 }
 
-func main() {
-
-	conn, _, err := websocket.DefaultDialer.Dial("ws://localhost:8080/ws", nil)
+func getHostname() string {
+	name, err := os.Hostname()
 	if err != nil {
-		log.Fatal(err)
+		return "UNKNOWN"
 	}
+	return name
+}
 
-	defer conn.Close()
-
-	hostname, _ := os.Hostname()
-	currentUser, _ := user.Current()
-
-	info := ClientInfo{
-		Hostname: hostname,
-		User:     currentUser.Username,
-	}
-
-	data, _ := json.Marshal(info)
-
-	err = conn.WriteMessage(websocket.TextMessage, data)
+func getUsername() string {
+	u, err := user.Current()
 	if err != nil {
-		log.Fatal(err)
+		return "UNKNOWN"
 	}
+	return u.Username
+}
 
-	log.Println("Informations envoyées au serveur")
+func connect() {
+
+	u := url.URL{
+		Scheme: "ws",
+		Host:   "187.124.39.231:8080",
+		Path:   "/ws",
+	}
 
 	for {
 
-		_, message, err := conn.ReadMessage()
+		conn, _, err := websocket.DefaultDialer.Dial(
+			u.String(),
+			nil,
+		)
 
 		if err != nil {
-			log.Println("Déconnecté du serveur")
-			break
-		}
-
-		var cmd Command
-
-		err = json.Unmarshal(message, &cmd)
-		if err != nil {
+			fmt.Println("Connexion impossible, nouvelle tentative dans 5 secondes...")
+			time.Sleep(5 * time.Second)
 			continue
 		}
 
-		switch cmd.Type {
+		fmt.Println("Connecté au serveur")
 
-		case "notification":
-
-			log.Printf("Notification reçue : %s\n", cmd.Data)
-
-			dlgs.Info(
-				"Dracks Alert",
-				cmd.Data,
-			)
+		info := ClientInfo{
+			Hostname: getHostname(),
+			User:     getUsername(),
 		}
+
+		data, _ := json.Marshal(info)
+
+		err = conn.WriteMessage(
+			websocket.TextMessage,
+			data,
+		)
+
+		if err != nil {
+			conn.Close()
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		for {
+
+			_, message, err := conn.ReadMessage()
+
+			if err != nil {
+				fmt.Println("Connexion perdue")
+				conn.Close()
+				break
+			}
+
+			var cmd Command
+
+			err = json.Unmarshal(message, &cmd)
+
+			if err != nil {
+				continue
+			}
+
+			switch cmd.Type {
+
+			case "notification":
+
+				fmt.Println()
+				fmt.Println("==============")
+				fmt.Println("NOTIFICATION")
+				fmt.Println(cmd.Data)
+				fmt.Println("==============")
+				fmt.Println()
+
+			case "ping":
+
+				conn.WriteMessage(
+					websocket.TextMessage,
+					[]byte(`{"type":"pong"}`),
+				)
+			}
+		}
+
+		time.Sleep(5 * time.Second)
 	}
+}
+
+func main() {
+
+	fmt.Println("Client Dracks Alert démarré")
+	fmt.Println("Connexion au serveur...")
+
+	_, err := net.LookupHost("187.124.39.231")
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	connect()
 }
