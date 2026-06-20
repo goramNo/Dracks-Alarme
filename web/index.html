@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Dracks Alert</title>
+
+<style>
+body{
+    background:#111;
+    color:white;
+    font-family:Arial;
+    max-width:900px;
+    margin:auto;
+    padding:20px;
+}
+
+input{
+    width:100%;
+    padding:10px;
+    margin-top:10px;
+}
+
+button{
+    padding:10px 20px;
+    margin-top:10px;
+}
+
+.client{
+    padding:8px;
+    margin:5px 0;
+    background:#222;
+}
+</style>
+
+</head>
+<body>
+
+<h1>Dracks Alert</h1>
+
+<h2>Clients connectés</h2>
+
+<div id="clients"></div>
+
+<hr>
+
+<h2>Envoyer une notification</h2>
+
+<input
+id="message"
+placeholder="Votre message">
+
+<br>
+
+<button onclick="sendNotif()">
+Envoyer
+</button>
+
+<script>
+
+async function loadClients(){
+
+    let response =
+        await fetch("/clients")
+
+    let clients =
+        await response.json()
+
+    let html = ""
+
+    clients.forEach(c => {
+
+        html += `
+        <div class="client">
+            ${c.hostname}
+            <br>
+            ${c.user}
+        </div>
+        `
+    })
+
+    document.getElementById(
+        "clients"
+    ).innerHTML = html
+}
+
+async function sendNotif(){
+
+    let message =
+        document.getElementById(
+            "message"
+        ).value
+
+    await fetch(
+        "/notify?msg=" +
+        encodeURIComponent(message)
+    )
+
+    alert("Notification envoyée")
+}
+
+setInterval(
+    loadClients,
+    2000
+)
+
+loadClients()
+
+</script>
+
+</body>
+</html>
